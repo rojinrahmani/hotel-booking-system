@@ -1,0 +1,29 @@
+[project]
+name = "hotel-booking-system"
+version = "0.1.0"
+description = "Hotel room booking REST API built with Django REST Framework and PostgreSQL"
+readme = "README.md"
+authors = [
+    { name = "Rojin", email = "rahmanirojin98@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "django>=5.2,<5.3",
+    "django-environ>=0.14.0",
+    "djangorestframework>=3.18.3",
+    "drf-spectacular>=0.30.0",
+    "psycopg[binary]>=3.3.7",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-django>=4.14.0",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["tests.py", "test_*.py"]
