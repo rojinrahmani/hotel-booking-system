@@ -3,6 +3,10 @@ from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import DateTimeRangeField, RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q
+from psycopg.types.range import Range as DateTimeTZRange
+
+# Bookings cover [check_in, check_out): check-in included, check-out excluded.
+PERIOD_BOUNDS = "[)"
 
 
 class TsTzRange(Func):
@@ -16,10 +20,14 @@ class BookingQuerySet(models.QuerySet):
     def overlapping(self, check_in, check_out):
         """Bookings whose [check_in, check_out) period overlaps the given one.
 
-        Two half-open periods overlap when each starts before the other ends.
-        Strict comparisons mean back-to-back stays (12:00 out, 12:00 in) do not overlap.
+        Uses the range operator `&&` on the same expression as the exclusion
+        constraint, so PostgreSQL can answer it from that constraint's GiST
+        index instead of scanning bookings. Half-open ranges mean back-to-back
+        stays (12:00 out, 12:00 in) do not overlap.
         """
-        return self.filter(check_in__lt=check_out, check_out__gt=check_in)
+        return self.annotate(
+            period=TsTzRange("check_in", "check_out", models.Value(PERIOD_BOUNDS))
+        ).filter(period__overlap=DateTimeTZRange(check_in, check_out, PERIOD_BOUNDS))
 
 
 class Booking(models.Model):
@@ -54,7 +62,7 @@ class Booking(models.Model):
                 expressions=[
                     ("room", RangeOperators.EQUAL),
                     (
-                        TsTzRange("check_in", "check_out", models.Value("[)")),
+                        TsTzRange("check_in", "check_out", models.Value(PERIOD_BOUNDS)),
                         RangeOperators.OVERLAPS,
                     ),
                 ],
