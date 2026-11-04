@@ -38,11 +38,7 @@ def validate_period(check_in, check_out) -> None:
 def find_available_rooms(*, beds, room_view, check_in, check_out):
     """Rooms matching the requested features with no overlapping booking."""
     busy_room_ids = Booking.objects.overlapping(check_in, check_out).values("room_id")
-    return (
-        Room.objects.filter(beds=beds, room_view=room_view)
-        .exclude(id__in=busy_room_ids)
-        .order_by("id")
-    )
+    return Room.objects.filter(beds=beds, room_view=room_view).exclude(id__in=busy_room_ids).order_by("id")
 
 
 def book_room(*, user, beds, room_view, check_in, check_out) -> Booking:

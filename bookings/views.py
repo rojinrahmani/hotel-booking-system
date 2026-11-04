@@ -1,8 +1,10 @@
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
+
+from config.schema import detail_error, validation_error
 
 from .models import Booking
 from .serializers import BookingRequestSerializer, BookingSerializer
@@ -30,9 +32,28 @@ class BookingViewSet(viewsets.ViewSet):
         request=BookingRequestSerializer,
         responses={
             201: BookingSerializer,
-            400: OpenApiResponse(description="Invalid input or period."),
-            409: OpenApiResponse(description="No matching room is free for this period."),
+            400: validation_error(
+                "Invalid input or period.",
+                {"non_field_errors": ["Check-out must be after check-in."]},
+            ),
+            409: detail_error(
+                "No matching room is free for this period.",
+                "No room matches the requested features for this period.",
+            ),
         },
+        examples=[
+            OpenApiExample(
+                "Two beds, sea view",
+                value={
+                    "user_id": 1,
+                    "beds": 2,
+                    "room_view": "sea",
+                    "check_in": "2030-12-10T14:00:00Z",
+                    "check_out": "2030-12-12T12:00:00Z",
+                },
+                request_only=True,
+            ),
+        ],
     )
     def create(self, request):
         request_serializer = BookingRequestSerializer(data=request.data)
@@ -62,7 +83,7 @@ class BookingViewSet(viewsets.ViewSet):
         description="Return one booking by id, with its assigned room.",
         responses={
             200: BookingSerializer,
-            404: OpenApiResponse(description="Booking not found."),
+            404: detail_error("Booking not found.", "No Booking matches the given query."),
         },
     )
     def retrieve(self, request, pk=None):

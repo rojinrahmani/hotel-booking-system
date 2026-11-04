@@ -21,17 +21,18 @@ class User(AbstractUser):
         FEMALE = "female", "Female"
 
     id_card = models.CharField("ID card number", max_length=20, unique=True)
-    phone = models.CharField(max_length=16, unique=True, validators=[phone_validator])
-    gender = models.CharField(max_length=10, choices=Gender.choices)
+    # NULL when not given: `unique` allows many NULLs, but only one empty string.
+    phone = models.CharField(max_length=16, unique=True, null=True, blank=True, validators=[phone_validator])
+    gender = models.CharField(max_length=10, choices=Gender.choices, blank=True)
 
     # Extra prompts for `createsuperuser` (username and password are always asked).
-    REQUIRED_FIELDS = ["email", "id_card", "phone", "gender"]
+    REQUIRED_FIELDS = ["id_card"]
 
     class Meta:
         ordering = ["id"]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(gender__in=["male", "female"]),
+                condition=models.Q(gender__in=["male", "female", ""]),
                 name="user_gender_valid",
             ),
         ]

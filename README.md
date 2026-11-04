@@ -42,18 +42,7 @@ Design decisions and assumptions are in [DECISIONS.md](DECISIONS.md).
    Keep `DJANGO_DEBUG=True` for local development. With `False`, `runserver` does
    not serve static files, so the admin and its styles do not display correctly.
 
-3. Start PostgreSQL with one of these options.
-
-   **Option A: Docker.** Set `DB_PORT=5433` in `.env`, then start the database:
-
-   ```bash
-   docker compose up -d db
-   ```
-
-   The other database values in `.env.example` already match `docker-compose.yml`.
-
-   **Option B: local PostgreSQL.** Create the database user and database (values
-   must match `.env`):
+3. Create the PostgreSQL user and database (values must match `.env`):
 
    ```bash
    sudo -u postgres psql
@@ -80,8 +69,7 @@ Design decisions and assumptions are in [DECISIONS.md](DECISIONS.md).
    uv run python manage.py createsuperuser
    ```
 
-   This command also asks for `email`, `id_card`, `phone` and `gender` (`male` or
-   `female`).
+   This command also asks for `id_card`.
 
 ## Run
 
@@ -95,20 +83,45 @@ uv run python manage.py runserver
 
 ### Swagger UI
 
-Swagger UI lists every API request with its fields and responses, and can send
-requests with **Try it out**. The page needs internet access, because it loads
-its assets from a CDN.
+Swagger UI lists every API request, grouped into `rooms` and `bookings`, with its
+fields and responses. Requests and error responses (`400`, `404`, `409`) include
+example bodies. **Try it out** sends a real request and needs no login, and it
+also works while you are logged in to the admin. Bookings need the `id` of an
+existing user (see [Create a guest](#create-a-guest)). The page needs internet
+access, because it loads its assets from a CDN.
 
 ### Admin panel
 
 Log in with the user from `createsuperuser` to manage rooms, bookings and users.
-The database constraints also apply here, so the admin cannot save an overlapping
-booking.
+
+- **Rooms**: filter by beds and view, search by label.
+- **Bookings**: filter by room view and beds, search by room label or by guest
+  username, email or ID card, and browse by check-in date. The `user` and `room`
+  fields search as you type.
+- **Users**: the normal Django user pages plus `id_card`, `phone` and `gender`.
+  Filter by gender, and search by username, email, ID card or phone.
+
+The admin shows a form error for an overlapping booking or a check-out that is
+not after check-in. A room that has bookings cannot be deleted. The admin does
+not reject a check-in in the past, so staff can record past stays; the API does
+reject it.
 
 ### Create a guest
 
-A booking needs the `id` of an existing, active user. Create guests with
-`POST /api/users/` (see [Users](#users)) or in the admin.
+A booking needs the `id` of an existing, active user. There is no user management
+API (out of scope), so create guests in the admin or in the shell:
+
+```bash
+uv run python manage.py shell -c '
+from django.contrib.auth import get_user_model
+guest = get_user_model().objects.create_user(
+    username="guest1",
+    password="change-me",
+    id_card="1234567890",
+)
+print(guest.id)
+'
+```
 
 ## Tests
 
@@ -119,17 +132,23 @@ databases.
 uv run pytest -q
 ```
 
-Tests cover user and room CRUD and validation, staff account protection, room selection, overlap rules, input
-validation, the database exclusion constraint, and a concurrency test where
-several threads race for the last room.
+Tests cover room CRUD and validation, room selection, overlap rules, input
+validation, the database exclusion constraint, the admin booking form and the
+Swagger schema. Concurrency tests start several threads that race for the same
+rooms, and other tests force each losing path in `book_room()`.
+
+## Lint and format
+
+```bash
+uv run ruff check .
+uv run ruff format .
+```
+
+The configuration is in `pyproject.toml`. Generated migrations are excluded.
 
 ## API
 
-**Warning:** The API has no authentication. Any client can read and change guest
-data, including ID card and phone numbers. Do not expose it publicly without
-adding authentication.
-
-Requests and responses use JSON.
+The API has no authentication. Requests and responses use JSON.
 
 List endpoints are paginated with 20 items per page. Use `?page=2` for the next
 page:
@@ -150,47 +169,6 @@ Error responses:
 | `400` | Invalid input | `{"beds": ["Ensure this value is less than or equal to 5."]}` |
 | `404` | Object not found | `{"detail": "No Room matches the given query."}` |
 | `409` | Request conflicts with current data | `{"detail": "Room has bookings and cannot be deleted."}` |
-
-### Users
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/users/` | List guests (paginated, 20 per page) |
-| `POST` | `/api/users/` | Create a guest |
-| `GET` | `/api/users/{id}/` | Retrieve a guest |
-| `PUT` | `/api/users/{id}/` | Replace a guest |
-| `PATCH` | `/api/users/{id}/` | Partially update a guest |
-| `DELETE` | `/api/users/{id}/` | Delete a guest (`409` if the guest has bookings) |
-
-| Field | Description |
-|---|---|
-| `username` | Required, unique |
-| `password` | Required on create, optional on update. Write-only, stored hashed, and checked by the Django password validators |
-| `id_card` | Required, unique, up to 20 characters |
-| `phone` | Required, unique, 10 to 15 digits with an optional leading `+` |
-| `gender` | Required, `male` or `female` |
-| `email`, `first_name`, `last_name` | Optional |
-| `is_active` | Optional, default `true`. Inactive users cannot make new bookings |
-| `id`, `date_joined` | Read-only |
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/users/ \
-  -H "Content-Type: application/json" \
-  -d '{
-        "username": "guest1",
-        "password": "correct-horse-battery",
-        "id_card": "1234567890",
-        "phone": "+989120000000",
-        "gender": "female"
-      }'
-```
-
-The API manages guests only. Staff accounts return `404` and do not appear in the
-list, and the API cannot set `is_staff` or `is_superuser`. Manage staff accounts in
-the admin.
-
-To keep the booking history of a guest, set `is_active` to `false` instead of
-deleting the guest.
 
 ### Rooms
 
@@ -267,8 +245,8 @@ Responses:
 ## Project structure
 
 ```
-config/      settings and root URLs
-users/       custom user model (built-in user + id_card, phone, gender), user API
+config/      settings, root URLs, shared Swagger responses
+users/       custom user model (built-in user + id_card, phone, gender)
 rooms/       Room model, serializer, CRUD viewset
 bookings/    Booking model, allocation service, booking API
 ```

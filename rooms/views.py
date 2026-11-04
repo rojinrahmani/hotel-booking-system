@@ -1,15 +1,25 @@
 from django.db.models import ProtectedError
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+from config.schema import detail_error, validation_error
+
 from .models import Room
 from .serializers import RoomSerializer
 
-INVALID_INPUT = OpenApiResponse(description="Invalid input.")
-ROOM_NOT_FOUND = OpenApiResponse(description="Room not found.")
+INVALID_INPUT = validation_error(
+    "Invalid input.",
+    {"beds": ["Ensure this value is less than or equal to 5."]},
+)
+ROOM_NOT_FOUND = detail_error("Room not found.", "No Room matches the given query.")
+ROOM_EXAMPLE = OpenApiExample(
+    "Sea view room",
+    value={"label": "101", "beds": 2, "room_view": "sea"},
+    request_only=True,
+)
 
 
 class RoomViewSet(viewsets.ViewSet):
@@ -43,6 +53,7 @@ class RoomViewSet(viewsets.ViewSet):
         description="Create a room with a unique label, 1-5 beds and a view.",
         request=RoomSerializer,
         responses={201: RoomSerializer, 400: INVALID_INPUT},
+        examples=[ROOM_EXAMPLE],
     )
     def create(self, request):
         serializer = RoomSerializer(data=request.data)
@@ -66,6 +77,7 @@ class RoomViewSet(viewsets.ViewSet):
         description="Update all fields of a room. Existing bookings keep this room.",
         request=RoomSerializer,
         responses={200: RoomSerializer, 400: INVALID_INPUT, 404: ROOM_NOT_FOUND},
+        examples=[ROOM_EXAMPLE],
     )
     def update(self, request, pk=None):
         return self._save(request, pk, partial=False)
@@ -76,6 +88,7 @@ class RoomViewSet(viewsets.ViewSet):
         description="Update only the given fields. Existing bookings keep this room.",
         request=RoomSerializer(partial=True),
         responses={200: RoomSerializer, 400: INVALID_INPUT, 404: ROOM_NOT_FOUND},
+        examples=[OpenApiExample("Change beds", value={"beds": 3}, request_only=True)],
     )
     def partial_update(self, request, pk=None):
         return self._save(request, pk, partial=True)
@@ -87,7 +100,10 @@ class RoomViewSet(viewsets.ViewSet):
         responses={
             204: OpenApiResponse(description="Room deleted."),
             404: ROOM_NOT_FOUND,
-            409: OpenApiResponse(description="Room has bookings and cannot be deleted."),
+            409: detail_error(
+                "Room has bookings and cannot be deleted.",
+                "Room has bookings and cannot be deleted.",
+            ),
         },
     )
     def destroy(self, request, pk=None):

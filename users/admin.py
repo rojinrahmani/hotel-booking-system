@@ -8,14 +8,17 @@ from .models import User
 class UserAdmin(BaseUserAdmin):
     """Built-in user admin plus the hotel-specific fields.
 
-    The API manages guests only, so the admin is the way to manage staff accounts.
+    There is no user API (out of scope), so the admin is the way to create guests.
     """
 
-    fieldsets = BaseUserAdmin.fieldsets + (
+    fieldsets = (
+        *BaseUserAdmin.fieldsets,
         ("Guest details", {"fields": ("id_card", "phone", "gender")}),
     )
-    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+    add_fieldsets = (
+        *BaseUserAdmin.add_fieldsets,
         ("Guest details", {"fields": ("email", "id_card", "phone", "gender")}),
     )
-    list_display = ("id", "username", "email", "id_card", "phone", "is_staff")
+    list_display = ("id", "username", "email", "id_card", "phone", "gender", "is_staff")
+    list_filter = (*BaseUserAdmin.list_filter, "gender")
     search_fields = ("username", "email", "id_card", "phone")

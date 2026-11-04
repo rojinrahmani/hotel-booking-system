@@ -31,8 +31,23 @@ final guarantee: it also covers writes that do not go through the service
 (admin, shell, future code). If the constraint fires inside the service, the
 service catches the `IntegrityError` and tries the next room.
 
-A test (`test_concurrent_requests_never_double_book`) starts 8 threads that
-race for one room; exactly one booking is created.
+Concurrency tests start 8 threads at the same time:
+
+- `test_concurrent_requests_never_double_book`: all threads race for one room;
+  exactly one booking is created.
+- `test_concurrent_requests_fall_through_to_next_free_room`: threads race for 3
+  rooms; each room is booked once and the other 5 requests are refused.
+- `test_concurrent_partly_overlapping_periods_never_double_book`: threads race
+  for one room with different periods that all overlap; exactly one booking is
+  created.
+
+These tests check the result, and the exclusion constraint alone could give the
+same result. Separate tests check each mechanism:
+
+- `test_request_waits_for_room_lock_then_sees_committed_booking`: a request
+  blocks while another transaction holds the room lock.
+- `TestBookRoomRaceBranches`: forces each losing path in `book_room()` without
+  relying on thread timing (re-check, deleted room, constraint violation).
 
 ### Half-open periods
 
@@ -61,10 +76,22 @@ Allocation logic lives in `bookings/services.py`, not in views or serializers.
 The view only validates input, calls `book_room()` and maps errors to HTTP
 status codes. This keeps the logic easy to test and reuse.
 
+### Plain `ViewSet`
+
+Views extend `viewsets.ViewSet` and define each action explicitly, so each request
+is visible in one place. `ModelViewSet` would need less code but would hide this
+behaviour. Each action declares its schema with `extend_schema`, because a plain
+`ViewSet` has no `serializer_class` for drf-spectacular to read.
+
 ### Validation at two levels
 
 Room rules (`beds` 1-5, valid `room_view`, `check_out > check_in`) are checked
 by model and serializer validators, and also by database check constraints.
+
+The admin booking form checks the period and overlap itself. The model has no
+`clean()`, and Django's constraint validation sends a reversed period to
+PostgreSQL, which rejects the range with a server error. The form does not reject
+a past check-in, so staff can record past stays.
 
 ### Configuration
 
@@ -73,13 +100,8 @@ so no secrets are in the code.
 
 ## Assumptions
 
-- **User identifier** is the primary key of an existing, active user.
-- **User API** manages guests only, although the assignment does not require it.
-  Without authentication, staff accounts must stay out of reach, or any client
-  could change an admin password. So the API hides staff accounts and cannot set
-  `is_staff` or `is_superuser`. Staff accounts are managed in the admin.
-- **User deletion** is blocked (`409`) when the user has bookings, to keep booking
-  history. Setting `is_active` to `false` blocks new bookings instead.
+- **User identifier** is the primary key of an existing, active user. There is
+  no user API; users are created in the admin or with `createsuperuser`.
 - **Feature matching is exact**: a request for 2 beds gets a room with exactly
   2 beds, not more.
 - **Room choice**: when several rooms match, the one with the lowest `id` is
@@ -91,20 +113,23 @@ so no secrets are in the code.
   booking history. Changing `beds` or `room_view` of a booked room is allowed;
   existing bookings keep their room.
 - **No authentication or permissions** on the API, as the assignment does not
-  ask for them. This also means any client can read and change guest data, so the
-  API must not be public until authentication is added.
-- **Gender** has two values, `male` and `female`. **ID card** is a unique string
-  up to 20 characters, with no country-specific format check.
+  ask for them. `DEFAULT_AUTHENTICATION_CLASSES` is empty, because DRF's default
+  session authentication rejects POST requests from a browser that is logged in
+  to the admin (CSRF error), which breaks Swagger's **Try it out**.
+- **Gender** is optional, with two values, `male` and `female`. **Email** is
+  optional. **Phone** is optional and unique when given; it is stored as `NULL`
+  when not given, so several users can have no phone. **ID card** is a required,
+  unique string up to 20 characters, with no country-specific format check.
 
 ## Not implemented / possible next steps
 
 - **Authentication and permissions**: e.g. token or JWT auth; only staff manage
-  rooms and users; a user books only for themselves (take the user from the
-  request instead of `user_id`).
+  rooms; a user books only for themselves (take the user from the request
+  instead of `user_id`).
 - **Booking cancellation and updates**: add a `status` field (`active`,
   `cancelled`) and limit the exclusion constraint to active bookings with a
   `condition`.
 - **Availability search**: a read-only endpoint listing free rooms for a period,
   reusing `find_available_rooms()`.
 - **Room list filters** by `beds` and `room_view`.
-- **Docker setup** for the app and database.
+- **Docker**: the project has no Docker files. It runs with a local PostgreSQL.

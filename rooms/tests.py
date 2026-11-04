@@ -28,9 +28,7 @@ def room(db):
 @pytest.mark.django_db
 class TestRoomCrud:
     def test_create(self, client):
-        response = client.post(
-            LIST_URL, {"label": "201", "beds": 3, "room_view": "mountain"}, format="json"
-        )
+        response = client.post(LIST_URL, {"label": "201", "beds": 3, "room_view": "mountain"}, format="json")
         assert response.status_code == 201
         assert response.data["label"] == "201"
         assert Room.objects.filter(label="201", beds=3, room_view="mountain").exists()

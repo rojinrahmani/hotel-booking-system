@@ -99,6 +99,9 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
+    # The API has no authentication. DRF's default SessionAuthentication would
+    # reject POST requests with a CSRF error for anyone logged in to the admin.
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
@@ -106,6 +109,15 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Hotel Booking API",
-    "DESCRIPTION": "Manage hotel rooms and book them by requested features.",
+    "DESCRIPTION": (
+        "Manage hotel rooms and book them by requested features. "
+        "The API has no authentication. A booking covers `[check_in, check_out)`, "
+        "so a guest can check in at the exact time the previous guest checks out."
+    ),
     "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "TAGS": [
+        {"name": "rooms", "description": "Create, read, update and delete hotel rooms."},
+        {"name": "bookings", "description": "Book a free room by features; list and read bookings."},
+    ],
 }

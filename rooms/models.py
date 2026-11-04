@@ -30,10 +30,6 @@ class Room(models.Model):
                 name="room_view_valid",
             ),
         ]
-        indexes = [
-            # Booking allocation filters rooms by (beds, room_view).
-            models.Index(fields=["beds", "room_view"], name="room_beds_view_idx"),
-        ]
 
     def __str__(self) -> str:
         return f"{self.label} ({self.beds} beds, {self.get_room_view_display()} view)"

@@ -14,11 +14,16 @@ class BookingRequestSerializer(serializers.Serializer):
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=get_user_model().objects.filter(is_active=True),
         source="user",
+        help_text="Id of an existing, active user.",
     )
-    beds = serializers.IntegerField(min_value=Room.MIN_BEDS, max_value=Room.MAX_BEDS)
+    beds = serializers.IntegerField(
+        min_value=Room.MIN_BEDS,
+        max_value=Room.MAX_BEDS,
+        help_text="The room must have exactly this number of beds.",
+    )
     room_view = serializers.ChoiceField(choices=Room.RoomView.choices)
-    check_in = serializers.DateTimeField()
-    check_out = serializers.DateTimeField()
+    check_in = serializers.DateTimeField(help_text="Included in the booking. Cannot be in the past.")
+    check_out = serializers.DateTimeField(help_text="Excluded from the booking. Must be after check-in.")
 
     def validate(self, attrs):
         try:

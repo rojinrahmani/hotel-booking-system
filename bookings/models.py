@@ -25,9 +25,9 @@ class BookingQuerySet(models.QuerySet):
         index instead of scanning bookings. Half-open ranges mean back-to-back
         stays (12:00 out, 12:00 in) do not overlap.
         """
-        return self.annotate(
-            period=TsTzRange("check_in", "check_out", models.Value(PERIOD_BOUNDS))
-        ).filter(period__overlap=DateTimeTZRange(check_in, check_out, PERIOD_BOUNDS))
+        return self.annotate(period=TsTzRange("check_in", "check_out", models.Value(PERIOD_BOUNDS))).filter(
+            period__overlap=DateTimeTZRange(check_in, check_out, PERIOD_BOUNDS)
+        )
 
 
 class Booking(models.Model):
