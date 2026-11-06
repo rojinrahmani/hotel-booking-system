@@ -12,12 +12,6 @@ from .services import NoRoomAvailable, book_room
 
 
 class BookingViewSet(viewsets.ViewSet):
-    """Book a room by features; list and inspect bookings.
-
-    create:   POST /api/bookings/
-    list:     GET  /api/bookings/
-    retrieve: GET  /api/bookings/{id}/
-    """
 
     queryset = Booking.objects.select_related("room").order_by("check_in", "id")
     pagination_class = PageNumberPagination
@@ -74,7 +68,7 @@ class BookingViewSet(viewsets.ViewSet):
     )
     def list(self, request):
         paginator = self.pagination_class()
-        page = paginator.paginate_queryset(self.queryset.all(), request, view=self)
+        page = paginator.paginate_queryset(self.queryset.all(), request)
         return paginator.get_paginated_response(BookingSerializer(page, many=True).data)
 
     @extend_schema(

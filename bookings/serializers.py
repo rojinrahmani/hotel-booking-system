@@ -9,8 +9,7 @@ from .services import InvalidBookingPeriod, validate_period
 
 
 class BookingRequestSerializer(serializers.Serializer):
-    """Input for POST /api/bookings/: who books, which room features, which period."""
-
+    
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=get_user_model().objects.filter(is_active=True),
         source="user",
@@ -34,8 +33,6 @@ class BookingRequestSerializer(serializers.Serializer):
 
 
 class BookingSerializer(serializers.ModelSerializer):
-    """Output: booking details with the assigned room."""
-
     user_id = serializers.IntegerField(read_only=True)
     room = RoomSerializer(read_only=True)
 

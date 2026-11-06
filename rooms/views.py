@@ -23,16 +23,6 @@ ROOM_EXAMPLE = OpenApiExample(
 
 
 class RoomViewSet(viewsets.ViewSet):
-    """CRUD for hotel rooms.
-
-    list:     GET    /api/rooms/
-    create:   POST   /api/rooms/
-    retrieve: GET    /api/rooms/{id}/
-    update:   PUT    /api/rooms/{id}/
-    partial:  PATCH  /api/rooms/{id}/
-    destroy:  DELETE /api/rooms/{id}/
-    """
-
     queryset = Room.objects.all()
     pagination_class = PageNumberPagination
 
@@ -47,7 +37,7 @@ class RoomViewSet(viewsets.ViewSet):
         page = paginator.paginate_queryset(self.queryset.all(), request, view=self)
         return paginator.get_paginated_response(RoomSerializer(page, many=True).data)
 
-    @extend_schema(
+    @extend_schema( 
         tags=["rooms"],
         summary="Create a room",
         description="Create a room with a unique label, 1-5 beds and a view.",
@@ -111,7 +101,6 @@ class RoomViewSet(viewsets.ViewSet):
         try:
             room.delete()
         except ProtectedError:
-            # Booking.room uses on_delete=PROTECT: keep booking history intact.
             return Response(
                 {"detail": "Room has bookings and cannot be deleted."},
                 status=status.HTTP_409_CONFLICT,

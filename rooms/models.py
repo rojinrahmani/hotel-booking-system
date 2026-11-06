@@ -20,7 +20,6 @@ class Room(models.Model):
     class Meta:
         ordering = ["id"]
         constraints = [
-            # Enforce domain rules at the DB level too, not only in validators.
             models.CheckConstraint(
                 condition=models.Q(beds__gte=1) & models.Q(beds__lte=5),
                 name="room_beds_between_1_and_5",

@@ -9,23 +9,14 @@ phone_validator = RegexValidator(
 
 
 class User(AbstractUser):
-    """Django's built-in user plus hotel-specific fields.
-
-    Inherited from AbstractUser: username, password (hashed), email,
-    first_name, last_name, is_active, is_staff, is_superuser, date_joined,
-    groups, permissions, and the default UserManager.
-    """
-
     class Gender(models.TextChoices):
         MALE = "male", "Male"
         FEMALE = "female", "Female"
 
-    id_card = models.CharField("ID card number", max_length=20, unique=True)
-    # NULL when not given: `unique` allows many NULLs, but only one empty string.
+    id_card = models.CharField("ID card number", max_length=10, unique=True)
     phone = models.CharField(max_length=16, unique=True, null=True, blank=True, validators=[phone_validator])
     gender = models.CharField(max_length=10, choices=Gender.choices, blank=True)
 
-    # Extra prompts for `createsuperuser` (username and password are always asked).
     REQUIRED_FIELDS = ["id_card"]
 
     class Meta:

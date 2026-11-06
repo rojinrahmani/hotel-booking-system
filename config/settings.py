@@ -28,10 +28,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
-    # Third-party
     "rest_framework",
     "drf_spectacular",
-    # Local
+
     "users",
     "rooms",
     "bookings",
@@ -99,8 +98,6 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
-    # The API has no authentication. DRF's default SessionAuthentication would
-    # reject POST requests with a CSRF error for anyone logged in to the admin.
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
