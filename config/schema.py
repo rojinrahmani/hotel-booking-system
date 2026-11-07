@@ -16,6 +16,22 @@ def detail_error(description: str, detail: str) -> OpenApiResponse:
     )
 
 
+def not_logged_in() -> OpenApiResponse:
+    """403 response: session authentication returns 403, not 401, without a login."""
+    return detail_error(
+        "Not logged in, or CSRF token missing.",
+        "Authentication credentials were not provided.",
+    )
+
+
+def not_admin() -> OpenApiResponse:
+    """403 response for endpoints that only admin users can call."""
+    return detail_error(
+        "Not logged in, not an admin user, or CSRF token missing.",
+        "You do not have permission to perform this action.",
+    )
+
+
 def validation_error(description: str, example: dict) -> OpenApiResponse:
     """400 response: a list of messages per field, or in `non_field_errors`."""
     return OpenApiResponse(

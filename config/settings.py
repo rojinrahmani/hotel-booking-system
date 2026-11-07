@@ -30,7 +30,6 @@ INSTALLED_APPS = [
     "django.contrib.postgres",
     "rest_framework",
     "drf_spectacular",
-
     "users",
     "rooms",
     "bookings",
@@ -97,8 +96,10 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+LOGIN_REDIRECT_URL = "/api/docs/"
+
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
@@ -108,13 +109,21 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Hotel Booking API",
     "DESCRIPTION": (
         "Manage hotel rooms and book them by requested features. "
-        "The API has no authentication. A booking covers `[check_in, check_out)`, "
+        "Log in at [/api-auth/login/](/api-auth/login/), then reload this page. "
+        "Bookings and reading rooms need a logged-in user. Changing rooms needs an admin user. "
+        "A booking covers `[check_in, check_out)`, "
         "so a guest can check in at the exact time the previous guest checks out."
     ),
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "TAGS": [
-        {"name": "rooms", "description": "Create, read, update and delete hotel rooms."},
-        {"name": "bookings", "description": "Book a free room by features; list and read bookings."},
+        {
+            "name": "rooms",
+            "description": "Logged-in users read hotel rooms. Admin users create, update and delete them.",
+        },
+        {
+            "name": "bookings",
+            "description": "Book a room by features; list, read and delete bookings. Logged-in users only.",
+        },
     ],
 }

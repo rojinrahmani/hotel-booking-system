@@ -1,4 +1,3 @@
-from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from rooms.models import Room
@@ -9,12 +8,6 @@ from .services import InvalidBookingPeriod, validate_period
 
 
 class BookingRequestSerializer(serializers.Serializer):
-    
-    user_id = serializers.PrimaryKeyRelatedField(
-        queryset=get_user_model().objects.filter(is_active=True),
-        source="user",
-        help_text="Id of an existing, active user.",
-    )
     beds = serializers.IntegerField(
         min_value=Room.MIN_BEDS,
         max_value=Room.MAX_BEDS,

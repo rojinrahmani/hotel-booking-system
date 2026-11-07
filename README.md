@@ -49,11 +49,10 @@ Design decisions and assumptions are in [DECISIONS.md](DECISIONS.md).
    ```
 
    ```sql
-   CREATE USER hotel WITH PASSWORD 'your_password' CREATEDB;
+   CREATE USER hotel WITH PASSWORD 'your_password';
    CREATE DATABASE hotel_booking OWNER hotel;
    ```
 
-   `CREATEDB` is needed only to run the tests (pytest creates a test database).
    Superuser rights are not needed: `btree_gist` is a trusted extension, so the
    database owner can enable it.
 
@@ -85,10 +84,9 @@ uv run python manage.py runserver
 
 Swagger UI lists every API request, grouped into `rooms` and `bookings`, with its
 fields and responses. Requests and error responses (`400`, `404`, `409`) include
-example bodies. **Try it out** sends a real request and needs no login, and it
-also works while you are logged in to the admin. Bookings need the `id` of an
-existing user (see [Create a guest](#create-a-guest)). The page needs internet
-access, because it loads its assets from a CDN.
+example bodies. **Try it out** sends a real request as the logged-in user, so
+[log in](#log-in) first and then reload the page. The page sends the CSRF token
+for you. The page needs internet access, because it loads its assets from a CDN.
 
 ### Admin panel
 
@@ -108,34 +106,37 @@ reject it.
 
 ### Create a guest
 
-A booking needs the `id` of an existing, active user. There is no user management
-API (out of scope), so create guests in the admin or in the shell:
+A booking belongs to the logged-in user. There is no user management API (out of
+scope), so create guests in the admin or in the shell:
 
 ```bash
 uv run python manage.py shell -c '
 from django.contrib.auth import get_user_model
-guest = get_user_model().objects.create_user(
+get_user_model().objects.create_user(
     username="guest1",
     password="change-me",
     id_card="1234567890",
 )
-print(guest.id)
 '
 ```
 
-## Tests
+### Add dummy data
 
-PostgreSQL must be running, and the database user must be allowed to create
-databases.
+Add test users, rooms and bookings to the database:
 
 ```bash
-uv run pytest -q
+uv run python manage.py seed
 ```
 
-Tests cover room CRUD and validation, room selection, overlap rules, input
-validation, the database exclusion constraint, the admin booking form and the
-Swagger schema. Concurrency tests start several threads that race for the same
-rooms, and other tests force each losing path in `book_room()`.
+The command needs `DJANGO_DEBUG=True`, because its users have a known password. All
+of them use the password `seed-pass-123`:
+
+- `seed_admin`: admin user.
+- `seed_guest1`, `seed_guest2`, `seed_guest3`: normal users with bookings.
+
+You can run the command again. It only adds what is missing and does not change
+existing data. Room labels start with `S-`. Room `S-302` is the only 5-bed room, so
+booking 5 beds for its booked period returns `409`.
 
 ## Lint and format
 
@@ -146,9 +147,29 @@ uv run ruff format .
 
 The configuration is in `pyproject.toml`. Generated migrations are excluded.
 
+## Log in
+
+The API uses DRF session authentication. Bookings and reading rooms need a logged-in
+user. Creating, updating and deleting rooms needs an admin user (`is_staff`). Without
+the required access, the API returns `403`.
+
+Log in at http://127.0.0.1:8000/api-auth/login/. Admin users can also log in at
+`/admin/`. Unsafe requests (`POST`, `PUT`, `PATCH`, `DELETE`) also need a CSRF token.
+
+With `curl`, keep the session in a cookie file and send the token in a header:
+
+```bash
+BASE=http://127.0.0.1:8000
+curl -s -c cookies.txt "$BASE/api-auth/login/" -o /dev/null
+TOKEN=$(awk '/csrftoken/ {print $7}' cookies.txt)
+curl -s -b cookies.txt -c cookies.txt "$BASE/api-auth/login/" -o /dev/null \
+  -d "username=guest1&password=change-me&csrfmiddlewaretoken=$TOKEN"
+TOKEN=$(awk '/csrftoken/ {print $7}' cookies.txt)
+```
+
 ## API
 
-The API has no authentication. Requests and responses use JSON.
+Requests and responses use JSON. See [Log in](#log-in) for authentication.
 
 List endpoints are paginated with 20 items per page. Use `?page=2` for the next
 page:
@@ -167,14 +188,17 @@ Error responses:
 | Status | Meaning | Example body |
 |---|---|---|
 | `400` | Invalid input | `{"beds": ["Ensure this value is less than or equal to 5."]}` |
+| `403` | Not logged in, not allowed, or CSRF token missing | `{"detail": "Authentication credentials were not provided."}` |
 | `404` | Object not found | `{"detail": "No Room matches the given query."}` |
 | `409` | Request conflicts with current data | `{"detail": "Room has bookings and cannot be deleted."}` |
 
 ### Rooms
 
+`GET` needs a logged-in user. `POST`, `PUT`, `PATCH` and `DELETE` need an admin user.
+
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/rooms/` | List rooms (paginated, 20 per page) |
+| `GET` | `/api/rooms/` | List rooms (paginated, 20 per page). `?label=` searches by label |
 | `POST` | `/api/rooms/` | Create a room |
 | `GET` | `/api/rooms/{id}/` | Retrieve a room |
 | `PUT` | `/api/rooms/{id}/` | Replace a room |
@@ -184,38 +208,43 @@ Error responses:
 Room fields: `label` (unique), `beds` (1-5), `room_view` (`sea`, `mountain`, `yard`).
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/rooms/ \
+curl -X POST http://127.0.0.1:8000/api/rooms/ -b cookies.txt \
+  -H "X-CSRFToken: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"label": "101", "beds": 2, "room_view": "sea"}'
 ```
 
 ### Bookings
 
+Logged-in users only. Users can list, retrieve and delete only their own bookings;
+another user's booking returns `404`. Admin users can access all bookings.
+
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/bookings/` | Book an available room matching the requested features |
 | `GET` | `/api/bookings/` | List bookings |
 | `GET` | `/api/bookings/{id}/` | Retrieve a booking |
+| `DELETE` | `/api/bookings/{id}/` | Delete a booking and free its room for that period |
 
 Request fields for `POST /api/bookings/`:
 
 | Field | Description |
 |---|---|
-| `user_id` | `id` of an existing, active user |
 | `beds` | Number of beds, 1-5. The room must have exactly this number |
 | `room_view` | `sea`, `mountain` or `yard` |
 | `check_in` | ISO 8601 datetime. Cannot be in the past |
 | `check_out` | ISO 8601 datetime. Must be after `check_in` |
 
-When several rooms match, the system books the room with the lowest `id`. A
+The booking belongs to the logged-in user. The API ignores `user_id` in the
+request. When several rooms match, the system books the room with the lowest `id`. A
 booking includes `check_in` and excludes `check_out`, so a guest can check in at
 the exact time the previous guest checks out.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/bookings/ \
+curl -X POST http://127.0.0.1:8000/api/bookings/ -b cookies.txt \
+  -H "X-CSRFToken: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-        "user_id": 1,
         "beds": 2,
         "room_view": "sea",
         "check_in": "2026-12-10T14:00:00Z",
@@ -238,8 +267,9 @@ Responses:
   }
   ```
 
-- `400 Bad Request`: invalid input (unknown user, `beds` out of range, unknown
+- `400 Bad Request`: invalid input (`beds` out of range, unknown
   view, check-out not after check-in, check-in in the past).
+- `403 Forbidden`: not logged in, or CSRF token missing.
 - `409 Conflict`: no room with the requested features is free for that period.
 
 ## Project structure
@@ -248,11 +278,11 @@ Responses:
 config/      settings, root URLs, shared Swagger responses
 users/       custom user model (built-in user + id_card, phone, gender)
 rooms/       Room model, serializer, CRUD viewset
-bookings/    Booking model, allocation service, booking API
+bookings/    Booking model, allocation service, booking API, seed command
 ```
 
 ## Not implemented
 
-Authentication and permissions, booking cancellation and updates, an availability
+Booking updates, cancellation history, an availability
 search, and room list filters are not implemented. [DECISIONS.md](DECISIONS.md)
 explains how to add them.

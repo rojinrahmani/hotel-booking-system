@@ -31,24 +31,6 @@ final guarantee: it also covers writes that do not go through the service
 (admin, shell, future code). If the constraint fires inside the service, the
 service catches the `IntegrityError` and tries the next room.
 
-Concurrency tests start 8 threads at the same time:
-
-- `test_concurrent_requests_never_double_book`: all threads race for one room;
-  exactly one booking is created.
-- `test_concurrent_requests_fall_through_to_next_free_room`: threads race for 3
-  rooms; each room is booked once and the other 5 requests are refused.
-- `test_concurrent_partly_overlapping_periods_never_double_book`: threads race
-  for one room with different periods that all overlap; exactly one booking is
-  created.
-
-These tests check the result, and the exclusion constraint alone could give the
-same result. Separate tests check each mechanism:
-
-- `test_request_waits_for_room_lock_then_sees_committed_booking`: a request
-  blocks while another transaction holds the room lock.
-- `TestBookRoomRaceBranches`: forces each losing path in `book_room()` without
-  relying on thread timing (re-check, deleted room, constraint violation).
-
 ### Half-open periods
 
 A booking covers `[check_in, check_out)`: check-in included, check-out
@@ -112,10 +94,18 @@ so no secrets are in the code.
 - **Room deletion** is blocked (`409`) when the room has bookings, to keep
   booking history. Changing `beds` or `room_view` of a booked room is allowed;
   existing bookings keep their room.
-- **No authentication or permissions** on the API, as the assignment does not
-  ask for them. `DEFAULT_AUTHENTICATION_CLASSES` is empty, because DRF's default
-  session authentication rejects POST requests from a browser that is logged in
-  to the admin (CSRF error), which breaks Swagger's **Try it out**.
+- **Seed command**: `manage.py seed` adds dummy data and only adds what is missing.
+  It refuses to run unless `DJANGO_DEBUG=True`, because its users have a known
+  password.
+- **Booking access**: users can list, retrieve and delete only their own bookings.
+  Admin users (`is_staff`) can access all bookings. Another user's booking returns
+  `404`, not `403`, so the API does not reveal which booking ids exist.
+- **Session authentication**: the API uses DRF's `SessionAuthentication`.
+  Bookings and room reads need `IsAuthenticated`. Room writes need `IsAdminUser`
+  (`is_staff`). A booking belongs to the logged-in user, so the request has no `user_id`. Session
+  authentication has no `WWW-Authenticate` header, so a missing login returns
+  `403`, not `401`. Unsafe requests need a CSRF token; the Swagger page sends it.
+  `/api-auth/login/` exists because `/admin/` rejects users who are not staff.
 - **Gender** is optional, with two values, `male` and `female`. **Email** is
   optional. **Phone** is optional and unique when given; it is stored as `NULL`
   when not given, so several users can have no phone. **ID card** is a required,
@@ -123,12 +113,10 @@ so no secrets are in the code.
 
 ## Not implemented / possible next steps
 
-- **Authentication and permissions**: e.g. token or JWT auth; only staff manage
-  rooms; a user books only for themselves (take the user from the request
-  instead of `user_id`).
-- **Booking cancellation and updates**: add a `status` field (`active`,
-  `cancelled`) and limit the exclusion constraint to active bookings with a
-  `condition`.
+- **Booking updates and cancellation history**: `DELETE /api/bookings/{id}/`
+  removes the row, so no history remains. To keep history, add a `status` field
+  (`active`, `cancelled`) and limit the exclusion constraint to active bookings
+  with a `condition`.
 - **Availability search**: a read-only endpoint listing free rooms for a period,
   reusing `find_available_rooms()`.
 - **Room list filters** by `beds` and `room_view`.

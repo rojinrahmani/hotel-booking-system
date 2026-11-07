@@ -8,6 +8,7 @@ admin.site.index_title = "Manage rooms, bookings and guests"
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api-auth/", include("rest_framework.urls")),
     path("api/", include("rooms.urls")),
     path("api/", include("bookings.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
